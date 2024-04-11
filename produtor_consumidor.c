@@ -3,71 +3,94 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-#define TAMANHO_FILA 10
+#define LINE_SIZE 10  // definição do tamanho da fila
 
-int fila[TAMANHO_FILA];
-int inicio = 0, fim = 0;
-int vez = 0;
+
+/*
+  Settado os valores globais do projeto
+*/
+int line[LINE_SIZE];
+int begin = 0, end = 0;
+int turn = 0;
 int flag[2] = {0};
 
+
+/*
+  Criada as primitivas do lock() e unlock() como requerida no caso
+  de uso de semaforos binário (mutex)
+*/
 void lock(int id) {
-    int outro = 1 - id;
+    int other = 1 - id;
     flag[id] = 1;
-    vez = outro;
-    while (flag[outro] && vez == outro);
+    turn = other;
+    while (flag[other] && turn == other);  // o turn pode mudar caso a outra função chame
 }
 
 void unlock(int id) {
     flag[id] = 0;
 }
 
-sem_t semaforo_mutex, semaforo_cheio, semaforo_vazio;
+
+/*
+  sem_t é um typedef 
+  delcarando o o tipo das variávies abaixo como semáforos
+*/
+sem_t semaphore_full, semaphore_empty;
 
 
-void *produtor(void *arg) {
+void *producer(void *arg) {
     int item;
-    int id = *((int *)arg);
+    int id = *((int *)arg);  // identifica qual o id do produtor
     while (1) {
-        item = rand() % 10; 
-        sem_wait(&semaforo_cheio); // Aguarda espaço na fila
-        lock(id);//Secao critica
-        fila[fim] = item;
-        fim = (fim + 1) % TAMANHO_FILA;
-        printf("Item produzido: %d, posicao: %d\n", item, fim);
-        unlock(id);//Secao critica
-        sem_post(&semaforo_vazio); // Sinaliza que a fila não está mais vazia
+        item = rand() % 10;  // pega um valor aleatório de 0 a 9
+        sem_wait(&semaphore_full);  // Aguarda espaço na fila
+        
+        lock(id);  // Seção crítica
+        line[end] = item;  // coloca o valor (aleatório) no fim da fila
+        int positionItem = end;  // pega o valor da posição que o item foi produzido
+        end = (end + 1) % LINE_SIZE;  // vai para a próxima posição da fila e a torna circular
+        printf("Item produzido: %d, adicionad a posicao: %d\n", item, positionItem);
+        unlock(id);  // Seção crítica encerrada
+
+        sem_post(&semaphore_empty);  // Sinaliza que a fila não está mais vazia
     }
 }
 
-void *consumidor(void *arg) {
+
+void *consumer(void *arg) {
     int item;
     int id = *((int *)arg);
     while (1) {
-        sem_wait(&semaforo_vazio); // Aguarda itens na fila
-        lock(id);//Secao critica
-        item = fila[inicio];
-        inicio = (inicio + 1) % TAMANHO_FILA;
-        printf("Item consumido: %d\n", item);
-        unlock(id);//Secao critica
-        sem_post(&semaforo_cheio); // Sinaliza que há espaço na fila
+        // Para travar (lock()) um semáforo ou esperar, se usa a função sem_wait
+        sem_wait(&semaphore_empty);  // Aguarda itens na fila
+
+        lock(id);  // Inicia a Seção Crítica
+        item = line[begin];  // pega o valor que se encontra no inicio da fila
+        int positionItem = begin;  // pega o valor da posição que o item foi consumido
+        begin = (begin + 1) % LINE_SIZE;  // vai para a próxima posição da fila e a torna circular
+        printf("Item consumido: %d, retirado da posicao: %d\n", item, positionItem);
+        unlock(id);  // Encerra a Seção Crítica
+
+        sem_post(&semaphore_full);  // Sinaliza que há espaço na fila
     }
 }
 
 int main() {
-    pthread_t produtor_thread, consumidor_thread;
-    int id_produtor = 0, id_consumidor = 1;
+    pthread_t producer_thread, consumer_thread;
+    int id_producer = 0, id_consumer = 1;
 
-    sem_init(&semaforo_cheio, 0, TAMANHO_FILA);
-    sem_init(&semaforo_vazio, 0, 0);
+    // Um semáforo é inicializado usando sem_init (para processos ou threads)
+    sem_init(&semaphore_full, 0, LINE_SIZE);
+    sem_init(&semaphore_empty, 0, 0);
 
-    pthread_create(&produtor_thread, NULL, produtor, &id_produtor);
-    pthread_create(&consumidor_thread, NULL, consumidor, &id_consumidor);
+    pthread_create(&producer_thread, NULL, producer, &id_producer);
+    pthread_create(&consumer_thread, NULL, consumer, &id_consumer);
 
-    pthread_join(produtor_thread, NULL);
-    pthread_join(consumidor_thread, NULL);
+    pthread_join(producer_thread, NULL);
+    pthread_join(consumer_thread, NULL);
 
-    sem_destroy(&semaforo_cheio);
-    sem_destroy(&semaforo_vazio);
+    sem_destroy(&semaphore_full);
+    sem_destroy(&semaphore_empty);
 
     return 0;
 }
