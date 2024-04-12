@@ -69,8 +69,8 @@ void *canibal(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
-    N = 5; // Número de canibais
-    M = 10; // Porções por reabastecimento
+    N = atoi(arg[1]); // Número de canibais
+    M = atoi(arg[2]); // Porções por reabastecimento
     
     // Inicializa o vetor flag e os semáforos
     flag = calloc(N, sizeof(int));
