@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -6,13 +7,16 @@
 #define LINE_SIZE 10  // definição do tamanho da fila
 
 
+
 /*
   Settado os valores globais do projeto
 */
 int line[LINE_SIZE];
 int begin = 0, end = 0;
 int turn = 0;
-int flag[2] = {0};
+int N;
+int M;
+int *flag;
 
 
 /*
@@ -20,10 +24,15 @@ int flag[2] = {0};
   de uso de semaforos binário (mutex)
 */
 void lock(int id) {
-    int other = 1 - id;
+    int other;
     flag[id] = 1;
-    turn = other;
-    while (flag[other] && turn == other);  // o turn pode mudar caso a outra função chame
+    turn = id;
+    
+    for (other = 0; other < N+M; other++) {
+        if (other != id) {
+            while (flag[other] && turn == id);
+        }
+    }
 }
 
 void unlock(int id) {
@@ -75,16 +84,36 @@ void *consumer(void *arg) {
     }
 }
 
-int main() {
+int main(int n, char* arg[]) {
+    
+    N = atoi(arg[1]);  // primeiro argumento na linha de comando
+    M = atoi(arg[2]);  // segundo argumento na linha de comando
+
+    flag = calloc((N+M), sizeof(int));  // declara o tamanho da flag
+
+    
+    
     pthread_t producer_thread, consumer_thread;
     int id_producer = 0, id_consumer = 1;
 
     // Um semáforo é inicializado usando sem_init (para processos ou threads)
     sem_init(&semaphore_full, 0, LINE_SIZE);
     sem_init(&semaphore_empty, 0, 0);
+    
+    
+    //adicionado
+    int ids[N+M];
+    
+    for (int i = 0; i < N; i++) {
+        ids[i] = i;
+        pthread_create(&producer_thread, NULL, producer, &ids[i]);
+    }
+    for (int i = N; i < M+N; i++) {
+        ids[i] = i;
+        pthread_create(&consumer_thread, NULL, consumer, &ids[i]);
+    }
 
-    pthread_create(&producer_thread, NULL, producer, &id_producer);
-    pthread_create(&consumer_thread, NULL, consumer, &id_consumer);
+    //end
 
     pthread_join(producer_thread, NULL);
     pthread_join(consumer_thread, NULL);
